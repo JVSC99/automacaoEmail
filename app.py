@@ -1,0 +1,39 @@
+from flask import Flask, request, jsonify
+import imaplib
+
+app = Flask(__name__)
+
+@app.route('/read_emails', methods=['GET'])
+def read_emails():
+    imap_host = request.args.get('imap')
+    login = request.args.get('login')
+    password = request.args.get('password')
+    last_id = request.args.get('last_id', None)
+
+    try:
+        # Conectar ao servidor IMAP
+        objCon = imaplib.IMAP4_SSL(imap_host)
+        objCon.login(login, password)
+        objCon.select(mailbox='inbox', readonly=True)
+
+        # Ler emails a partir do último id
+        status, email_ids = objCon.search(None, 'ALL')
+        email_ids = email_ids[0].split()
+
+        # Verificar e-mails a partir do último lido
+        if last_id:
+            email_ids = [email_id for email_id in email_ids if int(email_id) > int(last_id)]
+        
+        emails = []
+        for email_id in email_ids:
+            status, data = objCon.fetch(email_id, '(RFC822)')
+            emails.append({'id': email_id.decode(), 'data': data[0][1].decode()})
+        
+        objCon.logout()
+        return jsonify(emails)
+    
+    except Exception as e:
+        return jsonify({'error': str(e)})
+
+if __name__ == '__main__':
+    app.run(debug=True)
