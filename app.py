@@ -3,14 +3,16 @@ import imaplib
 
 app = Flask(__name__)
 
-@app.route('/read_emails', methods=['GET'])
+@app.route('/read_emails', methods=['POST'])
 def read_emails():
-    imap_host = request.args.get('imap')
-    login = request.args.get('login')
-    password = request.args.get('password')
-    last_id = request.args.get('last_id', None)
-
     try:
+        # Receber os dados via JSON
+        data = request.get_json()
+        imap_host = data.get('imap')
+        login = data.get('login')
+        password = data.get('password')
+        last_id = data.get('last_id', None)
+        
         # Conectar ao servidor IMAP
         objCon = imaplib.IMAP4_SSL(imap_host)
         objCon.login(login, password)
