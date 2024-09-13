@@ -1,3 +1,4 @@
+import email
 from flask import Flask, request, jsonify
 import imaplib
 import os
@@ -30,7 +31,28 @@ def read_emails():
         emails = []
         for email_id in email_ids:
             status, data = objCon.fetch(email_id, '(RFC822)')
-            emails.append({'id': email_id.decode(), 'data': data[0][1].decode()})
+            raw_email = data[0][1]
+            msg = email.message_from_bytes(raw_email)
+            
+            # Extraindo informações do e-mail
+            sender = msg.get('From')
+            subject = msg.get('Subject')
+            
+            # Verificar se o e-mail tem partes (multipart)
+            if msg.is_multipart():
+                for part in msg.walk():
+                    if part.get_content_type() == "text/plain":
+                        body = part.get_payload(decode=True).decode()  # O corpo do e-mail
+            else:
+                body = msg.get_payload(decode=True).decode()
+
+            # Adicionar ao JSON
+            emails.append({
+                "id": email_id.decode(),
+                "enviado_por": sender,
+                "titulo": subject,
+                "texto": body
+            })
         
         objCon.logout()
         return jsonify(emails)
@@ -39,6 +61,4 @@ def read_emails():
         return jsonify({'error': str(e)})
 
 if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))  # Pega a porta da variável de ambiente
-    app.run(host='0.0.0.0', port=port)  # Usa a porta dinâmica
-
+    app.run(debug=True)
