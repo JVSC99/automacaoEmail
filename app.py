@@ -1,5 +1,6 @@
 from flask import Flask, request, jsonify
 import imaplib
+import os
 
 app = Flask(__name__)
 
@@ -38,4 +39,6 @@ def read_emails():
         return jsonify({'error': str(e)})
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    port = int(os.environ.get('PORT', 5000))  # Pega a porta da variável de ambiente
+    app.run(host='0.0.0.0', port=port)  # Usa a porta dinâmica
+
