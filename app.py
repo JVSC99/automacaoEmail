@@ -1,4 +1,6 @@
 import email
+from email.mime.text import MIMEText
+import smtplib
 from flask import Flask, request, jsonify
 import imaplib
 import os
