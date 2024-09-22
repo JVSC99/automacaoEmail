@@ -113,10 +113,35 @@ def read_emails_last_7_days():
     
     except Exception as e:
         return jsonify({'error': str(e)})
+        
+@app.route('/send_email', methods=['POST'])
+def send_email():
+    try:
+        # Receber os dados via JSON
+        data = request.get_json()
+        smtp_host = data.get('smtp_host')
+        smtp_port = data.get('smtp_port')
+        login = data.get('login')
+        password = data.get('password')
+        titulo = data.get('titulo')
+        texto = data.get('texto')
+        destinatario = data.get('destinatario')
+        
+        # Preparar o e-mail
+        msg = MIMEText(texto)
+        msg['Subject'] = titulo
+        msg['From'] = login
+        msg['To'] = destinatario
 
-if __name__ == '__main__':
-    app.run(debug=True)
-
-
+        # Conectar ao servidor SMTP
+        with smtplib.SMTP_SSL(smtp_host, smtp_port) as server:
+            server.login(login, password)
+            server.sendmail(login, destinatario, msg.as_string())
+        
+        return jsonify({"message": "E-mail enviado com sucesso!"})
+    
+    except Exception as e:
+        return jsonify({'error': str(e)})
+        
 if __name__ == '__main__':
     app.run(debug=True)
