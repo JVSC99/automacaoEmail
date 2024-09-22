@@ -135,10 +135,22 @@ def send_email():
         msg['From'] = login
         msg['To'] = destinatario
 
-        # Conectar ao servidor SMTP
-        with smtplib.SMTP_SSL(smtp_host, smtp_port) as server:
-            server.login(login, password)
-            server.sendmail(login, destinatario, msg.as_string())
+        # Verificar se a porta é 465 (SSL/TLS) ou 587 (STARTTLS)
+        if smtp_port == 465:
+            # Conectar usando SSL/TLS
+            with smtplib.SMTP_SSL(smtp_host, smtp_port) as server:
+                server.login(login, password)
+                server.sendmail(login, destinatario, msg.as_string())
+        elif smtp_port == 587:
+            # Conectar usando STARTTLS
+            with smtplib.SMTP(smtp_host, smtp_port) as server:
+                server.ehlo()
+                server.starttls()  # Inicia o modo TLS
+                server.ehlo()
+                server.login(login, password)
+                server.sendmail(login, destinatario, msg.as_string())
+        else:
+            return jsonify({"error": "Porta SMTP não suportada"}), 400
         
         return jsonify({"message": "E-mail enviado com sucesso!"})
     
