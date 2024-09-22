@@ -4,9 +4,18 @@ import smtplib
 from flask import Flask, request, jsonify
 import imaplib
 import os
+from email.header import decode_header
 from datetime import datetime, timedelta
 
 app = Flask(__name__)
+
+# Função para decodificar os cabeçalhos que podem estar em UTF-8 ou outra codificação
+def decode_mime_words(s):
+    decoded_fragments = decode_header(s)
+    return ''.join([
+        fragment.decode(encoding if encoding else 'utf-8') if isinstance(fragment, bytes) else fragment
+        for fragment, encoding in decoded_fragments
+    ])
 
 @app.route('/read_emails', methods=['POST'])
 def read_emails():
@@ -37,10 +46,10 @@ def read_emails():
             raw_email = data[0][1]
             msg = email.message_from_bytes(raw_email)
             
-            # Extraindo informações do e-mail
-            sender = msg.get('From')
-            subject = msg.get('Subject')
-            
+            # Extraindo o remetente e o título
+            sender = decode_mime_words(msg.get('From'))
+            subject = decode_mime_words(msg.get('Subject'))
+
             # Verificar se o e-mail tem partes (multipart)
             if msg.is_multipart():
                 for part in msg.walk():
@@ -90,10 +99,10 @@ def read_emails_last_7_days():
             raw_email = data[0][1]
             msg = email.message_from_bytes(raw_email)
             
-            # Extraindo informações do e-mail
-            sender = msg.get('From')
-            subject = msg.get('Subject')
-            
+            # Extraindo o remetente e o título
+            sender = decode_mime_words(msg.get('From'))
+            subject = decode_mime_words(msg.get('Subject'))
+
             # Verificar se o e-mail tem partes (multipart)
             if msg.is_multipart():
                 for part in msg.walk():
@@ -115,91 +124,7 @@ def read_emails_last_7_days():
     
     except Exception as e:
         return jsonify({'error': str(e)})
-        
-@app.route('/send_email', methods=['POST'])
-def send_email():
-    try:
-        # Receber os dados via JSON
-        data = request.get_json()
-        smtp_host = data.get('smtp_host')
-        smtp_port = data.get('smtp_port')
-        login = data.get('login')
-        password = data.get('password')
-        titulo = data.get('titulo')
-        texto = data.get('texto')
-        destinatario = data.get('destinatario')
-        
-        # Preparar o e-mail
-        msg = MIMEText(texto)
-        msg['Subject'] = titulo
-        msg['From'] = login
-        msg['To'] = destinatario
 
-        # Verificar se a porta é 465 (SSL/TLS) ou 587 (STARTTLS)
-        if smtp_port == 465:
-            # Conectar usando SSL/TLS
-            with smtplib.SMTP_SSL(smtp_host, smtp_port) as server:
-                server.login(login, password)
-                server.sendmail(login, destinatario, msg.as_string())
-        elif smtp_port == 587:
-            # Conectar usando STARTTLS
-            with smtplib.SMTP(smtp_host, smtp_port) as server:
-                server.ehlo()
-                server.starttls()  # Inicia o modo TLS
-                server.ehlo()
-                server.login(login, password)
-                server.sendmail(login, destinatario, msg.as_string())
-        else:
-            return jsonify({"error": "Porta SMTP não suportada"}), 400
-        
-        return jsonify({"message": "E-mail enviado com sucesso!"})
-    
-    except Exception as e:
-        return jsonify({'error': str(e)})
-
-@app.route('/reply_email', methods=['POST'])
-def reply_email():
-    try:
-        # Receber os dados via JSON
-        data = request.get_json()
-        smtp_host = data.get('smtp_host')
-        smtp_port = data.get('smtp_port')
-        login = data.get('login')
-        password = data.get('password')
-        titulo = data.get('titulo')
-        texto = data.get('texto')
-        destinatario = data.get('destinatario')
-        in_reply_to = data.get('in_reply_to')  # ID da mensagem original para In-Reply-To
-
-        # Preparar o e-mail de resposta
-        msg = MIMEText(texto)
-        msg['Subject'] = f"Re: {titulo}"
-        msg['From'] = login
-        msg['To'] = destinatario
-        msg['In-Reply-To'] = in_reply_to  # Definir a mensagem à qual estamos respondendo
-        msg['References'] = in_reply_to  # Referenciar a mensagem original
-
-        # Conectar ao servidor SMTP
-        if smtp_port == 465:
-            # Conectar usando SSL/TLS
-            with smtplib.SMTP_SSL(smtp_host, smtp_port) as server:
-                server.login(login, password)
-                server.sendmail(login, destinatario, msg.as_string())
-        elif smtp_port == 587:
-            # Conectar usando STARTTLS
-            with smtplib.SMTP(smtp_host, smtp_port) as server:
-                server.ehlo()
-                server.starttls()
-                server.ehlo()
-                server.login(login, password)
-                server.sendmail(login, destinatario, msg.as_string())
-        else:
-            return jsonify({"error": "Porta SMTP não suportada"}), 400
-        
-        return jsonify({"message": "E-mail de resposta enviado com sucesso!"})
-    
-    except Exception as e:
-        return jsonify({'error': str(e)})
-        
 if __name__ == '__main__':
     app.run(debug=True)
+
