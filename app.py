@@ -2,6 +2,7 @@ import email
 from flask import Flask, request, jsonify
 import imaplib
 import os
+from datetime import datetime, timedelta
 
 app = Flask(__name__)
 
@@ -59,6 +60,63 @@ def read_emails():
     
     except Exception as e:
         return jsonify({'error': str(e)})
+
+@app.route('/read_emails_last_7_days', methods=['POST'])
+def read_emails_last_7_days():
+    try:
+        # Receber os dados via JSON
+        data = request.get_json()
+        imap_host = data.get('imap')
+        login = data.get('login')
+        password = data.get('password')
+
+        # Conectar ao servidor IMAP
+        objCon = imaplib.IMAP4_SSL(imap_host)
+        objCon.login(login, password)
+        objCon.select(mailbox='inbox', readonly=True)
+
+        # Calcula a data de 7 dias atrás
+        date_7_days_ago = (datetime.now() - timedelta(days=7)).strftime("%d-%b-%Y")
+
+        # Buscar emails dos últimos 7 dias
+        status, email_ids = objCon.search(None, f'SINCE {date_7_days_ago}')
+        email_ids = email_ids[0].split()
+
+        emails = []
+        for email_id in email_ids:
+            status, data = objCon.fetch(email_id, '(RFC822)')
+            raw_email = data[0][1]
+            msg = email.message_from_bytes(raw_email)
+            
+            # Extraindo informações do e-mail
+            sender = msg.get('From')
+            subject = msg.get('Subject')
+            
+            # Verificar se o e-mail tem partes (multipart)
+            if msg.is_multipart():
+                for part in msg.walk():
+                    if part.get_content_type() == "text/plain":
+                        body = part.get_payload(decode=True).decode()  # O corpo do e-mail
+            else:
+                body = msg.get_payload(decode=True).decode()
+
+            # Adicionar ao JSON
+            emails.append({
+                "id": email_id.decode(),
+                "enviado_por": sender,
+                "titulo": subject,
+                "texto": body
+            })
+        
+        objCon.logout()
+        return jsonify(emails)
+    
+    except Exception as e:
+        return jsonify({'error': str(e)})
+
+if __name__ == '__main__':
+    app.run(debug=True)
+
 
 if __name__ == '__main__':
     app.run(debug=True)
