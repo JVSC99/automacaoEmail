@@ -86,12 +86,12 @@ def read_emails_last_7_days():
         objCon.login(login, password)
         objCon.select(mailbox='inbox', readonly=True)
 
-        # Buscar todos os IDs de e-mails
-        status, email_ids = objCon.search(None, 'ALL')
-        email_ids = email_ids[0].split()
+        # Calcula a data de 7 dias atrás
+        date_7_days_ago = (datetime.now() - timedelta(days=7)).strftime("%d-%b-%Y")
 
-        # Limitar para os últimos 100 e-mails
-        email_ids = email_ids[-100:]  # Pegar os 100 IDs mais recentes
+        # Buscar emails dos últimos 7 dias
+        status, email_ids = objCon.search(None, f'SINCE {date_7_days_ago}')
+        email_ids = email_ids[0].split()
 
         emails = []
         for email_id in email_ids:
