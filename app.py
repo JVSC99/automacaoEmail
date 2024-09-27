@@ -80,29 +80,14 @@ def read_emails_last_7_days():
         imap_host = data.get('imap')
         login = data.get('login')
         password = data.get('password')
-        
-        print(f"Tentando conectar ao servidor IMAP {imap_host} com o usuário {login}")
-        
-        # Conectar ao servidor IMAP dentro de um bloco try-except
-        try:
-            objCon = imaplib.IMAP4_SSL(imap_host)
-        except imaplib.IMAP4.error as e:
-            print(f"Erro ao tentar conectar ao servidor IMAP: {str(e)}")
-            return jsonify({'error': 'Erro ao tentar conectar ao servidor IMAP'}), 500
-        except Exception as e:
-            print(f"Erro geral ao tentar conectar ao servidor: {str(e)}")
-            return jsonify({'error': 'Erro ao tentar conectar ao servidor'}), 500
+        use_uid = data.get('use_uid', True)  # Padrão é True
 
-        # Fazer login com outro bloco try-except para capturar erros de autenticação
-        try:
-            objCon.login(login, password)
-            print("Login bem-sucedido")
-        except imaplib.IMAP4.error as e:
-            print(f"Erro de autenticação: {str(e)}")
-            return jsonify({'error': 'Erro de autenticação. Verifique o login e senha.'}), 401
-        except Exception as e:
-            print(f"Erro geral durante o login: {str(e)}")
-            return jsonify({'error': 'Erro durante o login no servidor IMAP'}), 500
+        print(f"Tentando conectar ao servidor IMAP {imap_host} com o usuário {login}")
+
+        # Conectar ao servidor IMAP
+        objCon = imaplib.IMAP4_SSL(imap_host)
+        objCon.login(login, password)
+        print("Login bem-sucedido")
 
         objCon.select(mailbox='inbox', readonly=True)
         print("Caixa de entrada selecionada")
@@ -111,30 +96,65 @@ def read_emails_last_7_days():
         date_since = (datetime.now() - timedelta(days=7)).strftime("%d-%b-%Y")
         print(f"Buscando e-mails desde {date_since}")
 
-        # Buscar os UIDs dos e-mails desde essa data
-        status, email_uids = objCon.uid('search', None, f'SINCE {date_since}')
-        email_uids = email_uids[0].split()
+        # Buscar IDs dos e-mails desde essa data
+        if use_uid:
+            status, email_ids = objCon.uid('search', None, f'SINCE {date_since}')
+        else:
+            status, email_ids = objCon.search(None, f'SINCE {date_since}')
 
-        print(f"Número de e-mails encontrados: {len(email_uids)}")
-        
+        email_ids = email_ids[0].split()
+
+        print(f"Número de e-mails encontrados: {len(email_ids)}")
+
         emails = []
-        for email_id in email_uids:
+        for email_id in email_ids:
+            if use_uid:
+                status, data = objCon.uid('fetch', email_id, '(RFC822)')
+            else:
+                status, data = objCon.fetch(email_id, '(RFC822)')
 
-            status, data = objCon.fetch(email_id, '(RFC822)')
+            if status != 'OK':
+                print(f"Erro ao buscar o e-mail ID {email_id.decode()}")
+                continue
+
             raw_email = data[0][1]
             msg = email.message_from_bytes(raw_email)
-            
+
+            # Função auxiliar para obter o charset
+            def get_charset(message, default='utf-8'):
+                charset = message.get_content_charset()
+                if charset is None:
+                    charset = default
+                return charset
+
             # Extraindo o remetente e o título
             sender = decode_mime_words(msg.get('From'))
             subject = decode_mime_words(msg.get('Subject'))
 
             # Verificar se o e-mail tem partes (multipart)
             if msg.is_multipart():
+                body = ''
                 for part in msg.walk():
-                    if part.get_content_type() == "text/plain":
-                        body = part.get_payload(decode=True).decode()  # O corpo do e-mail
+                    if part.get_content_type() == "text/plain" and not part.is_multipart():
+                        charset = get_charset(part)
+                        payload = part.get_payload(decode=True)
+                        if payload is None:
+                            continue
+                        try:
+                            body += payload.decode(charset, errors='replace')
+                        except (LookupError, UnicodeDecodeError):
+                            # Tentar com 'latin1' se o charset não funcionar
+                            body += payload.decode('latin1', errors='replace')
             else:
-                body = msg.get_payload(decode=True).decode()
+                charset = get_charset(msg)
+                payload = msg.get_payload(decode=True)
+                if payload is not None:
+                    try:
+                        body = payload.decode(charset, errors='replace')
+                    except (LookupError, UnicodeDecodeError):
+                        body = payload.decode('latin1', errors='replace')
+                else:
+                    body = ''
 
             # Adicionar ao JSON
             emails.append({
@@ -143,11 +163,13 @@ def read_emails_last_7_days():
                 "titulo": subject,
                 "texto": body
             })
-        
+
         objCon.logout()
+        print(emails)
         return jsonify(emails)
-    
+
     except Exception as e:
+        print( str(e))
         return jsonify({'error': str(e)})
 
 @app.route('/send_email', methods=['POST'])
