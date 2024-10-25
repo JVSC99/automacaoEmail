@@ -25,27 +25,42 @@ def read_emails():
         imap_host = data.get('imap')
         login = data.get('login')
         password = data.get('password')
-        last_id = data.get('last_id', None)
-        
+        last_datetime_str = data.get('last_datetime', None)  # Data e hora no formato "YYYY-MM-DD HH:MM:SS"
+
+        # Converter a string de data e hora para um objeto datetime
+        if last_datetime_str:
+            last_datetime = datetime.strptime(last_datetime_str, '%Y-%m-%d %H:%M:%S')
+            last_date = last_datetime.strftime('%d-%b-%Y')  # Formato necessário para o IMAP (ex: "20-Oct-2024")
+        else:
+            last_datetime = None
+
         # Conectar ao servidor IMAP
         objCon = imaplib.IMAP4_SSL(imap_host)
         objCon.login(login, password)
         objCon.select(mailbox='inbox', readonly=True)
 
-        # Ler emails a partir do último id
-        status, email_ids = objCon.search(None, 'ALL')
+        # Se a última data foi enviada, buscar e-mails a partir dessa data
+        if last_datetime:
+            status, email_ids = objCon.search(None, f'SINCE {last_date}')
+        else:
+            status, email_ids = objCon.search(None, 'ALL')
+        
         email_ids = email_ids[0].split()
 
-        # Verificar e-mails a partir do último lido
-        if last_id:
-            email_ids = [email_id for email_id in email_ids if int(email_id) > int(last_id)]
-        
         emails = []
         for email_id in email_ids:
             status, data = objCon.fetch(email_id, '(RFC822)')
             raw_email = data[0][1]
             msg = email.message_from_bytes(raw_email)
-            
+
+            # Extrair a data de envio do e-mail
+            email_date_str = msg.get('Date')
+            email_datetime = datetime.strptime(email_date_str, '%a, %d %b %Y %H:%M:%S %z')
+
+            # Filtrar por horário se a última data e hora foi fornecida
+            if last_datetime and email_datetime <= last_datetime:
+                continue  # Ignorar e-mails anteriores ao horário fornecido
+
             # Extraindo o remetente e o título
             sender = decode_mime_words(msg.get('From'))
             subject = decode_mime_words(msg.get('Subject'))
@@ -63,14 +78,16 @@ def read_emails():
                 "id": email_id.decode(),
                 "enviado_por": sender,
                 "titulo": subject,
-                "texto": body
+                "texto": body,
+                "data": email_datetime.strftime('%Y-%m-%d %H:%M:%S')  # Incluir a data e hora do e-mail
             })
         
         objCon.logout()
         return jsonify(emails)
-    
+
     except Exception as e:
         return jsonify({'error': str(e)})
+
 
 @app.route('/read_emails_last_7_days', methods=['POST'])
 def read_emails_last_7_days():
