@@ -26,19 +26,21 @@ def read_emails():
         imap_host = data.get('imap')
         login = data.get('login')
         password = data.get('password')
-        last_datetime_str = data.get('last_datetime')  # Data e hora no formato "YYYY-MM-DD HH:MM:SS"
-
+        
+        # Receber as datas diretamente
+        imap_date = data.get('imap_date')  # Data no formato IMAP (ex: "20-Oct-2024")
+        datetime_str = data.get('datetime_str')  # Data no formato "YYYY-MM-DD HH:MM:SS"
+        
         # Converter a string de data e hora para um objeto datetime
-        last_datetime = datetime.strptime(last_datetime_str, '%Y-%m-%d %H:%M:%S')
-        last_date = last_datetime.strftime('%d-%b-%Y')  # Formato necessário para o IMAP (ex: "20-Oct-2024")
+        last_datetime = datetime.strptime(datetime_str, '%Y-%m-%d %H:%M:%S')
 
         # Conectar ao servidor IMAP
         objCon = imaplib.IMAP4_SSL(imap_host)
         objCon.login(login, password)
         objCon.select(mailbox='inbox', readonly=True)
 
-        # Sempre buscar e-mails a partir da última data
-        status, email_ids = objCon.search(None, f'SINCE {last_date}')
+        # Sempre buscar e-mails a partir da data no formato IMAP
+        status, email_ids = objCon.search(None, f'SINCE {imap_date}')
         email_ids = email_ids[0].split()
 
         emails = []
@@ -49,7 +51,7 @@ def read_emails():
 
             # Extrair a data de envio do e-mail
             email_date_str = msg.get('Date')
-            email_datetime = datetime.strptime(email_date_str, '%a, %d %b %Y %H:%M:%S %z')
+            email_datetime = email.utils.parsedate_to_datetime(email_date_str)  # Conversão automática de data
 
             # Filtrar por horário (após a data e hora fornecida)
             if email_datetime <= last_datetime:
