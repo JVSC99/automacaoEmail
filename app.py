@@ -27,12 +27,12 @@ def read_emails():
         login = data.get('login')
         password = data.get('password')
         
-        # Receber as datas diretamente
+        # Receber as datas diretamente no formato ISO 8601 (ex: "2024-10-10T19:21:52+00:00")
+        iso_datetime_str = data.get('iso_datetime')  # Data no formato ISO 8601
         imap_date = data.get('imap_date')  # Data no formato IMAP (ex: "20-Oct-2024")
-        datetime_str = data.get('datetime_str')  # Data no formato "YYYY-MM-DD HH:MM:SS"
-        
-        # Converter a string de data e hora para um objeto datetime
-        last_datetime = datetime.strptime(datetime_str, '%Y-%m-%d %H:%M:%S')
+
+        # Converter a string ISO 8601 para um objeto datetime "aware" (com fuso horário)
+        last_datetime = datetime.fromisoformat(iso_datetime_str)
 
         # Conectar ao servidor IMAP
         objCon = imaplib.IMAP4_SSL(imap_host)
@@ -53,7 +53,7 @@ def read_emails():
             email_date_str = msg.get('Date')
             email_datetime = email.utils.parsedate_to_datetime(email_date_str)  # Conversão automática de data
 
-            # Filtrar por horário (após a data e hora fornecida)
+            # Filtrar por horário (após a data e hora fornecida, ambos são "aware")
             if email_datetime <= last_datetime:
                 continue  # Ignorar e-mails anteriores ao horário fornecido
 
@@ -83,8 +83,6 @@ def read_emails():
 
     except Exception as e:
         return jsonify({'error': str(e)})
-
-
 
 @app.route('/read_emails_last_7_days', methods=['POST'])
 def read_emails_last_7_days():
