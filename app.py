@@ -7,6 +7,7 @@ import os
 from email.header import decode_header
 from datetime import datetime, timedelta
 
+
 app = Flask(__name__)
 
 # Função para decodificar os cabeçalhos que podem estar em UTF-8 ou outra codificação
@@ -25,26 +26,19 @@ def read_emails():
         imap_host = data.get('imap')
         login = data.get('login')
         password = data.get('password')
-        last_datetime_str = data.get('last_datetime', None)  # Data e hora no formato "YYYY-MM-DD HH:MM:SS"
+        last_datetime_str = data.get('last_datetime')  # Data e hora no formato "YYYY-MM-DD HH:MM:SS"
 
         # Converter a string de data e hora para um objeto datetime
-        if last_datetime_str:
-            last_datetime = datetime.strptime(last_datetime_str, '%Y-%m-%d %H:%M:%S')
-            last_date = last_datetime.strftime('%d-%b-%Y')  # Formato necessário para o IMAP (ex: "20-Oct-2024")
-        else:
-            last_datetime = None
+        last_datetime = datetime.strptime(last_datetime_str, '%Y-%m-%d %H:%M:%S')
+        last_date = last_datetime.strftime('%d-%b-%Y')  # Formato necessário para o IMAP (ex: "20-Oct-2024")
 
         # Conectar ao servidor IMAP
         objCon = imaplib.IMAP4_SSL(imap_host)
         objCon.login(login, password)
         objCon.select(mailbox='inbox', readonly=True)
 
-        # Se a última data foi enviada, buscar e-mails a partir dessa data
-        if last_datetime:
-            status, email_ids = objCon.search(None, f'SINCE {last_date}')
-        else:
-            status, email_ids = objCon.search(None, 'ALL')
-        
+        # Sempre buscar e-mails a partir da última data
+        status, email_ids = objCon.search(None, f'SINCE {last_date}')
         email_ids = email_ids[0].split()
 
         emails = []
@@ -57,8 +51,8 @@ def read_emails():
             email_date_str = msg.get('Date')
             email_datetime = datetime.strptime(email_date_str, '%a, %d %b %Y %H:%M:%S %z')
 
-            # Filtrar por horário se a última data e hora foi fornecida
-            if last_datetime and email_datetime <= last_datetime:
+            # Filtrar por horário (após a data e hora fornecida)
+            if email_datetime <= last_datetime:
                 continue  # Ignorar e-mails anteriores ao horário fornecido
 
             # Extraindo o remetente e o título
@@ -87,6 +81,7 @@ def read_emails():
 
     except Exception as e:
         return jsonify({'error': str(e)})
+
 
 
 @app.route('/read_emails_last_7_days', methods=['POST'])
