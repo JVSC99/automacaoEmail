@@ -31,6 +31,10 @@ def read_emails():
         iso_datetime_str = data.get('iso_datetime')  # Data no formato ISO 8601
         imap_date = data.get('imap_date')  # Data no formato IMAP (ex: "20-Oct-2024")
 
+        # Garantir que iso_datetime_str é uma string válida
+        if not isinstance(iso_datetime_str, str):
+            return jsonify({'error': 'iso_datetime deve ser uma string no formato ISO 8601'}), 400
+
         # Converter a string ISO 8601 para um objeto datetime "aware" (com fuso horário)
         last_datetime = datetime.fromisoformat(iso_datetime_str)
 
